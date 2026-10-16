@@ -19,11 +19,12 @@ class SystemMonitor: ObservableObject {
     @Published var networkOverlaySettings: NetworkOverlaySettings = .defaults
     @Published var networkSourceName: String? = nil
     @Published var diskSourcePath: String? = nil
-    @Published var metricOrder: [MonitorMetric] = [.network, .cpu, .gpu, .ram, .power, .disk, .fan]
+    @Published var metricOrder: [MonitorMetric] = [.network, .cpu, .gpu, .ram, .power, .disk, .fan, .battery]
     @Published var hiddenMetrics = Set<MonitorMetric>()
     @Published var thresholds: MetricThresholds = .defaults
     @Published var fanReadings: [FanReading] = []
     @Published var networkThroughput = NetworkThroughput(downloadBytesPerSecond: 0, uploadBytesPerSecond: 0)
+    @Published var batteryStatus: BatteryStatus?
     @Published var diskStats = DiskStats(volumeName: "Macintosh HD", totalBytes: 0, availableBytes: 0, usedBytes: 0, readBytesPerSecond: 0, writeBytesPerSecond: 0)
     @Published var fanControlSettings: FanControlSettings = .defaults
     @Published var fanControlError: String? = nil
@@ -38,6 +39,7 @@ class SystemMonitor: ObservableObject {
     @Published var fanHistory: [ResourcePoint] = []
     @Published var networkHistory: [ResourcePoint] = []
     @Published var diskHistory: [ResourcePoint] = []
+    @Published var batteryHistory: [ResourcePoint] = []
     private var samplingTimer: DispatchSourceTimer?
     private let samplingQueue = DispatchQueue(label: "com.powerMonitor.telemetry", qos: .userInitiated)
     private var isSampling = false
@@ -46,6 +48,7 @@ class SystemMonitor: ObservableObject {
     private let fanSensor = FanSensorReader()
     private let networkReader = NetworkSpeedReader()
     private let diskReader = DiskStatsReader()
+    private let batteryReader = BatteryReader()
     private let fanControlService = FanControlService()
     private var lastAppliedFanCommand: FanControlCommand?
     private var wakeObserver: NSObjectProtocol?
@@ -135,6 +138,10 @@ class SystemMonitor: ObservableObject {
         !hiddenMetrics.contains(.disk)
     }
 
+    var shouldReadBatteryMetrics: Bool {
+        !hiddenMetrics.contains(.battery)
+    }
+
     var shouldReadRAMMetrics: Bool {
         !hiddenMetrics.contains(.ram)
     }
@@ -207,7 +214,7 @@ class SystemMonitor: ObservableObject {
 
     private static func normalizedMetricOrder(from rawValues: [String]) -> [MonitorMetric] {
         var result = rawValues.compactMap(MonitorMetric.init(rawValue:))
-        let preferredOrder: [MonitorMetric] = [.network, .cpu, .gpu, .ram, .power, .disk, .fan]
+        let preferredOrder: [MonitorMetric] = [.network, .cpu, .gpu, .ram, .power, .disk, .fan, .battery]
         for metric in preferredOrder where !result.contains(metric) {
             result.append(metric)
         }
@@ -278,6 +285,7 @@ class SystemMonitor: ObservableObject {
             ? diskReader.read(intervalMs: intervalMs)
             : DiskStats(volumeName: diskStats.volumeName, totalBytes: 0, availableBytes: 0, usedBytes: 0, readBytesPerSecond: 0, writeBytesPerSecond: 0)
         let diskY = disk.readBytesPerSecond
+        let battery = shouldReadBatteryMetrics ? batteryReader.read() : nil
         let network: NetworkThroughput
 
         if isMock {
@@ -299,6 +307,7 @@ class SystemMonitor: ObservableObject {
             self.fanReadings = fans
             self.networkThroughput = network
             self.diskStats = disk
+            self.batteryStatus = battery
             self.appendSample(&self.cpuHistory, value: cpuY, timestamp: timestamp)
             self.appendSample(&self.gpuHistory, value: gpuY, timestamp: timestamp)
             self.appendSample(&self.ramHistory, value: ramY, timestamp: timestamp)
@@ -306,6 +315,9 @@ class SystemMonitor: ObservableObject {
             self.appendSample(&self.fanHistory, value: fanY, timestamp: timestamp)
             self.appendSample(&self.networkHistory, value: networkY, timestamp: timestamp)
             self.appendSample(&self.diskHistory, value: diskY, timestamp: timestamp)
+            if let battery {
+                self.appendSample(&self.batteryHistory, value: battery.percent / 100, timestamp: timestamp)
+            }
             self.syncFanControl(with: decoded)
         }
     }
@@ -671,7 +683,7 @@ class SystemMonitor: ObservableObject {
             for metric in visibleMetrics + hiddenMetrics where !combined.contains(metric) {
                 combined.append(metric)
             }
-            for metric in [MonitorMetric.network, .cpu, .gpu, .ram, .power, .disk, .fan] where !combined.contains(metric) {
+            for metric in [MonitorMetric.network, .cpu, .gpu, .ram, .power, .disk, .fan, .battery] where !combined.contains(metric) {
                 combined.append(metric)
             }
 

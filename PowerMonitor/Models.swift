@@ -93,6 +93,7 @@ enum MonitorMetric: String, CaseIterable, Codable, Identifiable, Hashable {
     case power
     case fan
     case network
+    case battery
 
     var id: String { rawValue }
 
@@ -105,6 +106,7 @@ enum MonitorMetric: String, CaseIterable, Codable, Identifiable, Hashable {
             case .power: return "PWR"
             case .fan: return "FAN"
             case .network: return "NET"
+            case .battery: return "BAT"
         }
     }
 
@@ -117,6 +119,7 @@ enum MonitorMetric: String, CaseIterable, Codable, Identifiable, Hashable {
             case .power: return "Power"
             case .fan: return "Fan"
             case .network: return "Network"
+            case .battery: return "Battery"
         }
     }
 
@@ -129,8 +132,37 @@ enum MonitorMetric: String, CaseIterable, Codable, Identifiable, Hashable {
             case .power: return "Power Info"
             case .fan: return "Fan Speed"
             case .network: return "Network Speed"
+            case .battery: return "Battery"
         }
     }
+}
+
+struct BatteryStatus: Equatable {
+    let percent: Double
+    let isCharging: Bool
+    let isPluggedIn: Bool
+    let isCharged: Bool
+    // Minutes to full while charging, minutes to empty otherwise. Nil while macOS is estimating.
+    let minutesRemaining: Int?
+    // What the charger advertised during USB-PD negotiation.
+    let negotiatedPower: PowerReading?
+    // What is actually flowing in from the charger right now.
+    let inputPower: PowerReading?
+    // Positive while the battery charges, negative while it discharges.
+    let batteryWatts: Double?
+
+    var stateTitle: String {
+        if isCharging { return "Charging" }
+        if isCharged { return "Charged" }
+        if isPluggedIn { return "Not Charging" }
+        return "On Battery"
+    }
+}
+
+struct PowerReading: Equatable {
+    let watts: Double
+    let volts: Double?
+    let amps: Double?
 }
 
 struct FanReading: Identifiable, Codable, Equatable {

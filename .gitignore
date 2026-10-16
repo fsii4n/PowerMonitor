@@ -24,3 +24,6 @@ DerivedData/
 
 # CocoaPods
 Pods/
+
+# Built locally from FanHelperSource.txt (see README)
+PowerMonitor/Resources/PowerMonitorFanHelper

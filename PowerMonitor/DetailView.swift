@@ -178,6 +178,35 @@ struct DetailPopupView: View {
                     Divider()
                     chartDetailRow
                     ResourceChartSection(points: monitor.networkHistory, yDomain: paddedDomain(from: monitor.networkHistory, minimumUpperBound: 100_000), accent: .mint, yUnit: .bytesPerSecond)
+
+                case .battery:
+                    VStack(spacing: 6) {
+                        if let battery = monitor.batteryStatus {
+                            DetailRow(icon: "battery.75percent", label: "Level", value: String(format: "%.0f%%", battery.percent))
+                            DetailRow(icon: battery.isPluggedIn ? "powerplug" : "battery.100", label: "State", value: battery.stateTitle)
+                            if !battery.isCharged, battery.isCharging || !battery.isPluggedIn {
+                                DetailRow(
+                                    icon: "clock",
+                                    label: battery.isCharging ? "Until Full" : "Remaining",
+                                    value: formatMinutes(battery.minutesRemaining)
+                                )
+                            }
+                            if battery.isPluggedIn {
+                                Divider().opacity(0.5)
+                                DetailRow(icon: "powerplug", label: "Negotiated", value: formatPower(battery.negotiatedPower))
+                                DetailRow(icon: "bolt", label: "Actual", value: formatPower(battery.inputPower))
+                            }
+                            if let batteryWatts = battery.batteryWatts {
+                                DetailRow(icon: "bolt.batteryblock", label: "Battery", value: String(format: "%+.1f W", batteryWatts))
+                            }
+                        } else {
+                            DetailRow(icon: "questionmark.circle", label: "Status", value: "No battery")
+                        }
+                    }
+                    .padding(.top, 4)
+                    Divider()
+                    chartDetailRow
+                    ResourceChartSection(points: monitor.batteryHistory, yDomain: 0...1, accent: .green, yUnit: .percent)
             }
         }
     }
@@ -235,6 +264,18 @@ struct DetailPopupView: View {
             return String(format: "%.1f %@", value, unit)
         }
         return String(format: "%.2f %@", value, unit)
+    }
+
+    private func formatMinutes(_ minutes: Int?) -> String {
+        guard let minutes else { return "Calculating..." }
+        return String(format: "%d:%02d", minutes / 60, minutes % 60)
+    }
+
+    private func formatPower(_ reading: PowerReading?) -> String {
+        guard let reading else { return "--" }
+        let watts = String(format: "%.1f W", reading.watts)
+        guard let volts = reading.volts, let amps = reading.amps else { return watts }
+        return watts + String(format: " (%.1fV %.1fA)", volts, amps)
     }
 
     private func formatDiskUsage(usedBytes: Int64, totalBytes: Int64) -> String {

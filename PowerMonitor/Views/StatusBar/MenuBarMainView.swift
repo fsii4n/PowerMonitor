@@ -103,6 +103,9 @@ struct MenuBarMainView: View {
                         rate = monitor.networkThroughput.totalBytesPerSecond
                 }
                 return formatCompactRate(rate)
+            case .battery:
+                guard let battery = monitor.batteryStatus else { return "--" }
+                return String(format: "%.0f%%", battery.percent)
         }
     }
 
@@ -165,6 +168,13 @@ struct MenuBarMainView: View {
                 value = currentNetworkRate()
                 if value >= monitor.thresholds.networkRed { return glowRed }
                 if value >= monitor.thresholds.networkYellow { return glowYellow }
+                return glowGreen
+            case .battery:
+                // Low battery is the alert state, so the scale runs the other way.
+                guard let battery = monitor.batteryStatus else { return glowGreen }
+                if battery.isPluggedIn { return glowGreen }
+                if battery.percent <= 10 { return glowRed }
+                if battery.percent <= 20 { return glowYellow }
                 return glowGreen
         }
     }
